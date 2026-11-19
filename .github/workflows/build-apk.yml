@@ -1,14 +1,56 @@
 name: Build APK
 on: [push, workflow_dispatch]
+
+env:
+  PRODUCTION_REPO: st-i-ve/st-i-ve-upande-production-mobile
+  PRODUCTION_BRANCH: main
+  LIVESTOCK_REPO: st-i-ve/upande-livestock
+  LIVESTOCK_BRANCH: kaitet
+  SCP_REPO: upandeltd/Upande-Scout
+  SCP_BRANCH: kaitet
+  MINIAPPS_TOKEN: ${{ secrets.MINIAPPS_TOKEN }}
+
 jobs:
   apk:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Unzip project if uploaded as a zip
         run: |
-          ls -la
           if [ -f upande-apps.zip ]; then unzip -q -o upande-apps.zip && echo "APP_DIR=upande-apps" >> $GITHUB_ENV; else echo "APP_DIR=." >> $GITHUB_ENV; fi
+          [ -n "$MINIAPPS_TOKEN" ] || echo "::warning::MINIAPPS_TOKEN is not set, so the APK will be built without any mini apps."
+
+      - name: Get Production
+        if: env.MINIAPPS_TOKEN != ''
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PRODUCTION_REPO }}
+          ref: ${{ env.PRODUCTION_BRANCH }}
+          token: ${{ env.MINIAPPS_TOKEN }}
+          path: ${{ env.APP_DIR }}/miniapps/production
+
+      - name: Get Livestock
+        if: env.MINIAPPS_TOKEN != ''
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.LIVESTOCK_REPO }}
+          ref: ${{ env.LIVESTOCK_BRANCH }}
+          token: ${{ env.MINIAPPS_TOKEN }}
+          path: ${{ env.APP_DIR }}/miniapps/livestock
+
+      - name: Get Scouting
+        if: env.MINIAPPS_TOKEN != ''
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SCP_REPO }}
+          ref: ${{ env.SCP_BRANCH }}
+          token: ${{ env.MINIAPPS_TOKEN }}
+          path: ${{ env.APP_DIR }}/miniapps/scp
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -16,17 +58,19 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+
       - name: Install
         working-directory: ${{ env.APP_DIR }}
         run: |
-          npm ci
-          npm install react-native-safe-area-context@5.11.1 --no-save
-          echo "safe-area version: $(node -p "require('react-native-safe-area-context/package.json').version")"
+          node scripts/merge-miniapp-deps.mjs
+          npm install --no-audit --no-fund --legacy-peer-deps
+
       - name: Build release APK
         working-directory: ${{ env.APP_DIR }}/android
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --no-daemon
+
       - uses: actions/upload-artifact@v4
         with:
           name: upande-apps-apk
