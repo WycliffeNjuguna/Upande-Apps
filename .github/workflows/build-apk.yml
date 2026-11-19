@@ -7,7 +7,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Unzip project if uploaded as a zip
         run: |
-          if [ -f upande-apps.zip ]; then unzip -q upande-apps.zip && echo "APP_DIR=upande-apps" >> $GITHUB_ENV; else echo "APP_DIR=." >> $GITHUB_ENV; fi
+          ls -la
+          if [ -f upande-apps.zip ]; then unzip -q -o upande-apps.zip && echo "APP_DIR=upande-apps" >> $GITHUB_ENV; else echo "APP_DIR=." >> $GITHUB_ENV; fi
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -17,7 +18,10 @@ jobs:
           java-version: 17
       - name: Install
         working-directory: ${{ env.APP_DIR }}
-        run: npm ci
+        run: |
+          npm ci
+          npm install react-native-safe-area-context@5.11.1 --no-save
+          echo "safe-area version: $(node -p "require('react-native-safe-area-context/package.json').version")"
       - name: Build release APK
         working-directory: ${{ env.APP_DIR }}/android
         run: |
