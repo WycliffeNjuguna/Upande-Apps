@@ -9,10 +9,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Unzip project if uploaded as a zip
+      - name: Unzip the newest uploaded project zip
         run: |
-          if [ -f upande-apps.zip ]; then unzip -q -o upande-apps.zip && echo "APP_DIR=upande-apps" >> $GITHUB_ENV; else echo "APP_DIR=." >> $GITHUB_ENV; fi
+          ZIP=$(for f in upande-apps*.zip; do [ -f "$f" ] && echo "$(git log -1 --format=%ct -- "$f") $f"; done | sort -n | tail -1 | cut -d' ' -f2-)
+          if [ -n "$ZIP" ]; then
+            echo "Using: $ZIP"
+            rm -rf upande-apps && unzip -q -o "$ZIP"
+            echo "APP_DIR=upande-apps" >> $GITHUB_ENV
+          else
+            echo "APP_DIR=." >> $GITHUB_ENV
+          fi
+          DIR=$([ -n "$ZIP" ] && echo upande-apps || echo .)
+          [ -f "$DIR/scripts/prepare-miniapps.mjs" ] || { echo "::error::$ZIP is an old version of the project. Upload the latest upande-apps.zip."; exit 1; }
 
       - uses: actions/setup-node@v4
         with:
