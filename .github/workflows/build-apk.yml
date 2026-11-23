@@ -2,12 +2,6 @@ name: Build APK
 on: [push, workflow_dispatch]
 
 env:
-  PRODUCTION_REPO: st-i-ve/st-i-ve-upande-production-mobile
-  PRODUCTION_BRANCH: main
-  LIVESTOCK_REPO: st-i-ve/upande-livestock
-  LIVESTOCK_BRANCH: kaitet
-  SCP_REPO: upandeltd/Upande-Scout
-  SCP_BRANCH: kaitet
   MINIAPPS_TOKEN: ${{ secrets.MINIAPPS_TOKEN }}
 
 jobs:
@@ -19,37 +13,6 @@ jobs:
       - name: Unzip project if uploaded as a zip
         run: |
           if [ -f upande-apps.zip ]; then unzip -q -o upande-apps.zip && echo "APP_DIR=upande-apps" >> $GITHUB_ENV; else echo "APP_DIR=." >> $GITHUB_ENV; fi
-          [ -n "$MINIAPPS_TOKEN" ] || echo "::warning::MINIAPPS_TOKEN is not set, so the APK will be built without any mini apps."
-
-      - name: Get Production
-        if: env.MINIAPPS_TOKEN != ''
-        continue-on-error: true
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.PRODUCTION_REPO }}
-          ref: ${{ env.PRODUCTION_BRANCH }}
-          token: ${{ env.MINIAPPS_TOKEN }}
-          path: ${{ env.APP_DIR }}/miniapps/production
-
-      - name: Get Livestock
-        if: env.MINIAPPS_TOKEN != ''
-        continue-on-error: true
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.LIVESTOCK_REPO }}
-          ref: ${{ env.LIVESTOCK_BRANCH }}
-          token: ${{ env.MINIAPPS_TOKEN }}
-          path: ${{ env.APP_DIR }}/miniapps/livestock
-
-      - name: Get Scouting
-        if: env.MINIAPPS_TOKEN != ''
-        continue-on-error: true
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.SCP_REPO }}
-          ref: ${{ env.SCP_BRANCH }}
-          token: ${{ env.MINIAPPS_TOKEN }}
-          path: ${{ env.APP_DIR }}/miniapps/scp
 
       - uses: actions/setup-node@v4
         with:
@@ -59,17 +22,23 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Pull in the mini apps
+        working-directory: ${{ env.APP_DIR }}
+        run: node scripts/prepare-miniapps.mjs --fresh
+
       - name: Install
         working-directory: ${{ env.APP_DIR }}
         run: |
-          node scripts/merge-miniapp-deps.mjs
           npm install --no-audit --no-fund --legacy-peer-deps
+          npx expo install --fix -- --legacy-peer-deps --no-audit --no-fund
+
+      - name: Generate Android project
+        working-directory: ${{ env.APP_DIR }}
+        run: npx expo prebuild --platform android --no-install
 
       - name: Build release APK
         working-directory: ${{ env.APP_DIR }}/android
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --no-daemon
+        run: ./gradlew assembleRelease --no-daemon
 
       - uses: actions/upload-artifact@v4
         with:
